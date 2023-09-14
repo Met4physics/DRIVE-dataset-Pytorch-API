@@ -78,6 +78,37 @@ def criterion(inputs, target, loss_weight=None, num_classes: int = 2, dice: bool
     return losses['out'] + 0.5 * losses['aux']
 
 
+class ConfusionMatrix(object):
+    def __init__(self, num_classes):
+        self.num_classes = num_classes
+        self.mat = None
+
+    def update(self, a, b):
+        n = self.num_classes
+        if self.mat is None:
+            # 创建混淆矩阵
+            self.mat = torch.zeros((n, n), dtype=torch.int64, device=a.device)
+        with torch.no_grad():
+            # 寻找GT中为目标的像素索引
+            k = (a >= 0) & (a < n)
+            # 统计像素真实类别a[k]被预测成类别b[k]的个数(这里的做法很巧妙)
+            inds = n * a[k].to(torch.int64) + b[k]
+            self.mat += torch.bincount(inds, minlength=n**2).reshape(n, n)
+
+    def reset(self):
+        if self.mat is not None:
+            self.mat.zero_()
+
+    def compute(self):
+        h = self.mat.float()
+        # 计算全局预测准确率(混淆矩阵的对角线为预测正确的个数)
+        acc_global = torch.diag(h).sum() / h.sum()
+        # 计算每个类别的准确率
+        acc = torch.diag(h) / h.sum(1)
+        # 计算每个类别预测与真实目标的iou
+        iu = torch.diag(h) / (h.sum(1) + h.sum(0) - torch.diag(h))
+        return acc_global, acc, iu
+
 
 if __name__ == '__main__':
     mean = (0.709, 0.381, 0.224)
@@ -87,25 +118,16 @@ if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else "cpu")
     num_classes = 2
 
-    print(torch.device)
+    print(device)
     model = UNet(in_channels=3, num_classes=num_classes, base_c=32)
     model.load_state_dict(torch.load('./best_model.pth')['model'])
     train_loader, test_loader = get_dataloader(batch_size=1)
 
-    roi_img = Image.open('./DRIVE/training/mask/21_training_mask.gif').convert('L')
-    roi_img = np.array(roi_img)
-    print(roi_img.shape)
-
+    confusion = ConfusionMatrix(num_classes)
     for inputs, labels in train_loader:
         outputs = model(inputs)['out']
-        print('outputs.shape:', outputs.shape)
-        outputs = outputs.argmax(1).squeeze(0)
-        print('outputs.shape:', outputs.shape)
-        outputs = outputs.to("cpu").numpy().astype(np.uint8)
-        outputs[outputs == 1] = 255
-        # outputs[roi_img == 0] = 0
-        mask = Image.fromarray(outputs)
-        mask.show()
-
-        print('labels.shape:', labels.shape)
+        print(outputs[0, 0, :])
+        outputs = outputs.argmax(1)
+        print(outputs[0, 0, :])
+        confusion.update(labels.flatten(), outputs.argmax(1).flatten())
 
