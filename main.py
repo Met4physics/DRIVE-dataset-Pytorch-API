@@ -107,7 +107,9 @@ class ConfusionMatrix(object):
         acc = torch.diag(h) / h.sum(1)
         # 计算每个类别预测与真实目标的iou
         iu = torch.diag(h) / (h.sum(1) + h.sum(0) - torch.diag(h))
-        return acc_global, acc, iu
+        recall = torch.diag(h) / h.sum(0)
+        f1 = 2 * acc * recall / (acc + recall)
+        return acc_global, acc, iu, f1
 
 
 if __name__ == '__main__':
@@ -126,8 +128,6 @@ if __name__ == '__main__':
     confusion = ConfusionMatrix(num_classes)
     for inputs, labels in train_loader:
         outputs = model(inputs)['out']
-        print(outputs[0, 0, :])
-        outputs = outputs.argmax(1)
-        print(outputs[0, 0, :])
         confusion.update(labels.flatten(), outputs.argmax(1).flatten())
+        a, b, c, d =confusion.compute()
 
