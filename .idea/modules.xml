@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/snntest.iml" filepath="$PROJECT_DIR$/.idea/snntest.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/DRIVE-dataset.iml" filepath="$PROJECT_DIR$/.idea/DRIVE-dataset.iml" />
     </modules>
   </component>
 </project>
