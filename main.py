@@ -2,7 +2,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 import os
-import wandb
 from unet import UNet
 from spiking_unet import S_UNet
 from PIL import Image
@@ -66,12 +65,15 @@ def dice_loss(x: torch.Tensor, target: torch.Tensor, multiclass: bool = False, i
 
 def criterion(inputs, target, loss_weight=None, num_classes: int = 2, dice: bool = True, ignore_index: int = -100):
     losses = {}
+    target = target.to(device)
     for name, x in inputs.items():
         # 忽略target中值为255的像素，255的像素是目标边缘或者padding填充
+        x = x.to(device)
         loss = nn.functional.cross_entropy(x, target, ignore_index=ignore_index, weight=loss_weight)
+        loss = loss.to(device)
         if dice is True:
-            dice_target = build_target(target, num_classes, ignore_index)
-            loss += dice_loss(x, dice_target, multiclass=True, ignore_index=ignore_index)
+            dice_target = build_target(target, num_classes, ignore_index).to(device)
+            loss += dice_loss(x, dice_target, multiclass=True, ignore_index=ignore_index).to(device)
         losses[name] = loss
 
     if len(losses) == 1:
@@ -122,17 +124,35 @@ if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else "cpu")
     num_classes = 2
 
-    print(device)
-    model = UNet(in_channels=3, num_classes=num_classes, base_c=32)
+    print(torch.cuda.current_device())
+    # model = UNet(in_channels=3, num_classes=num_classes, base_c=32)
     s_model = S_UNet(in_channels=3, num_classes=num_classes, base_c=32)
-    model.load_state_dict(torch.load('./best_model.pth')['model'])
+    s_model = s_model.to(device)
+    # model.load_state_dict(torch.load('./best_model.pth')['model'])
     train_loader, test_loader = get_dataloader(batch_size=1)
+    optimizer = torch.optim.Adam(s_model.parameters(), lr=lr)
 
-    confusion = ConfusionMatrix(num_classes)
-    for inputs, labels in train_loader:
-        outputs = s_model(inputs)['out']
-        confusion.update(labels.flatten(), outputs.argmax(1).flatten())
-    acc_global, acc, iou, f1 = confusion.compute()
+    confmat = ConfusionMatrix(num_classes)
+    s_model.train()
+    loss_weight = torch.as_tensor([1.0, 2.0], device=device)
+
+    for i in range(epoch):
+        for inputs, labels in train_loader:
+            inputs = inputs.to(device)
+            outputs = s_model(inputs)
+            optimizer.zero_grad()
+            loss = criterion(outputs, labels, loss_weight, num_classes=num_classes, ignore_index=255)
+            with torch.autograd.set_detect_anomaly(True):
+                loss.backward(retain_graph=True)
+            optimizer.step()
+            print(f'epoch {i}: loss = {loss}')
+
+    with torch.no_grad():
+        for inputs, labels in test_loader:
+            outputs = s_model(inputs)['out']
+            confmat.update(labels.flatten(), outputs.argmax(1).flatten())
+
+    acc_global, acc, iou, f1 = confmat.compute()
     acc_global, acc, iou, f1 = acc_global.item(), acc.tolist(), iou.tolist(), f1.tolist()
     print(f'acc_global: {acc_global}, acc: {acc}, iou: {iou}, f1: {f1}')
     acc_global, acc_mean, iou_mean, f1_mean = round(acc_global, 3), round(sum(acc) / len(acc), 3), round(sum(iou) / len(
