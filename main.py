@@ -4,6 +4,7 @@ import torch.nn as nn
 import os
 import wandb
 from unet import UNet
+from spiking_unet import S_UNet
 from PIL import Image
 
 from Ddataset import get_dataloader
@@ -62,6 +63,7 @@ def dice_loss(x: torch.Tensor, target: torch.Tensor, multiclass: bool = False, i
     fn = multiclass_dice_coeff if multiclass else dice_coeff
     return 1 - fn(x, target, ignore_index=ignore_index)
 
+
 def criterion(inputs, target, loss_weight=None, num_classes: int = 2, dice: bool = True, ignore_index: int = -100):
     losses = {}
     for name, x in inputs.items():
@@ -93,7 +95,7 @@ class ConfusionMatrix(object):
             k = (a >= 0) & (a < n)
             # 统计像素真实类别a[k]被预测成类别b[k]的个数(这里的做法很巧妙)
             inds = n * a[k].to(torch.int64) + b[k]
-            self.mat += torch.bincount(inds, minlength=n**2).reshape(n, n)
+            self.mat += torch.bincount(inds, minlength=n ** 2).reshape(n, n)
 
     def reset(self):
         if self.mat is not None:
@@ -122,12 +124,17 @@ if __name__ == '__main__':
 
     print(device)
     model = UNet(in_channels=3, num_classes=num_classes, base_c=32)
+    s_model = S_UNet(in_channels=3, num_classes=num_classes, base_c=32)
     model.load_state_dict(torch.load('./best_model.pth')['model'])
     train_loader, test_loader = get_dataloader(batch_size=1)
 
     confusion = ConfusionMatrix(num_classes)
     for inputs, labels in train_loader:
-        outputs = model(inputs)['out']
+        outputs = s_model(inputs)['out']
         confusion.update(labels.flatten(), outputs.argmax(1).flatten())
-        a, b, c, d =confusion.compute()
-
+    acc_global, acc, iou, f1 = confusion.compute()
+    acc_global, acc, iou, f1 = acc_global.item(), acc.tolist(), iou.tolist(), f1.tolist()
+    print(f'acc_global: {acc_global}, acc: {acc}, iou: {iou}, f1: {f1}')
+    acc_global, acc_mean, iou_mean, f1_mean = round(acc_global, 3), round(sum(acc) / len(acc), 3), round(sum(iou) / len(
+        iou), 3), round(sum(f1) / len(f1), 3)
+    print(f'mean acc_global: {acc_global}, mean acc: {acc_mean}, mean iou: {iou_mean}, mean f1: {f1_mean}')
