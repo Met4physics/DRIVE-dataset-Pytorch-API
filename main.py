@@ -64,22 +64,21 @@ def dice_loss(x: torch.Tensor, target: torch.Tensor, multiclass: bool = False, i
 
 
 def criterion(inputs, target, loss_weight=None, num_classes: int = 2, dice: bool = True, ignore_index: int = -100):
-    losses = {}
-    target = target.to(device)
-    for name, x in inputs.items():
-        # 忽略target中值为255的像素，255的像素是目标边缘或者padding填充
-        x = x.to(device)
-        loss = nn.functional.cross_entropy(x, target, ignore_index=ignore_index, weight=loss_weight)
-        loss = loss.to(device)
-        if dice is True:
-            dice_target = build_target(target, num_classes, ignore_index).to(device)
-            loss += dice_loss(x, dice_target, multiclass=True, ignore_index=ignore_index).to(device)
-        losses[name] = loss
-
-    if len(losses) == 1:
-        return losses['out']
-
-    return losses['out'] + 0.5 * losses['aux']
+    # losses = {}
+    # for name, x in inputs.items():
+    #     # 忽略target中值为255的像素，255的像素是目标边缘或者padding填充
+    #     loss = nn.functional.cross_entropy(x, target, ignore_index=ignore_index, weight=loss_weight)
+    #     if dice is True:
+    #         dice_target = build_target(target, num_classes, ignore_index)
+    #         loss += dice_loss(x, dice_target, multiclass=True, ignore_index=ignore_index)
+    #     losses[name] = loss
+    #
+    # if len(losses) == 1:
+    #     return losses['out']
+    #
+    # return losses['out'] + 0.5 * losses['aux']
+    x = inputs['out']
+    return nn.functional.cross_entropy(x, target, ignore_index=ignore_index, weight=loss_weight)
 
 
 class ConfusionMatrix(object):
@@ -139,17 +138,18 @@ if __name__ == '__main__':
     for i in range(epoch):
         for inputs, labels in train_loader:
             inputs = inputs.to(device)
+            labels = labels.to(device)
             outputs = s_model(inputs)
             optimizer.zero_grad()
-            loss = criterion(outputs, labels, loss_weight, num_classes=num_classes, ignore_index=255)
-            with torch.autograd.set_detect_anomaly(True):
-                loss.backward(retain_graph=True)
+            # loss = criterion(outputs, labels, loss_weight, dice=False, num_classes=num_classes, ignore_index=255)
+            loss = nn.functional.cross_entropy(outputs, labels, ignore_index=255, weight=loss_weight)
+            loss.backward()
             optimizer.step()
             print(f'epoch {i}: loss = {loss}')
 
     with torch.no_grad():
         for inputs, labels in test_loader:
-            outputs = s_model(inputs)['out']
+            outputs = s_model(inputs)
             confmat.update(labels.flatten(), outputs.argmax(1).flatten())
 
     acc_global, acc, iou, f1 = confmat.compute()

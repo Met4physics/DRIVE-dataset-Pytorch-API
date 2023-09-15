@@ -20,7 +20,8 @@ class DoubleConv(nn.Module):
         )
 
     def forward(self, x):
-        return self.c(x)
+        t = self.c(x)
+        return t
 
 
 
@@ -32,7 +33,9 @@ class Down(nn.Module):
         functional.set_step_mode(self, step_mode=step_mode)
 
     def forward(self, inputs):
-        return self.conv(self.pool(inputs))
+        t = self.pool(inputs)
+        tt = self.conv(t)
+        return tt
 
 
 class Up(nn.Module):
@@ -68,7 +71,8 @@ class OutConv(nn.Module):
 
 
     def forward(self, x):
-        return self.c(x)
+        temp = self.c(x)
+        return temp
 
 
 class S_UNet(nn.Module):
@@ -112,4 +116,4 @@ class S_UNet(nn.Module):
         x = self.up4(x, x1)
         logits = self.out_conv(x).mean(0)
 
-        return {"out": logits}
+        return logits
