@@ -4,6 +4,7 @@ import torch.nn as nn
 import os
 from unet import UNet
 from spiking_unet import S_UNet
+from test import ts_UNet
 from PIL import Image
 
 from Ddataset import get_dataloader
@@ -125,10 +126,11 @@ if __name__ == '__main__':
 
     print(torch.cuda.current_device())
     # model = UNet(in_channels=3, num_classes=num_classes, base_c=32)
-    s_model = S_UNet(in_channels=3, num_classes=num_classes, base_c=32)
+    # s_model = S_UNet(in_channels=3, num_classes=num_classes, base_c=32)
+    s_model = ts_UNet(in_channels=3, num_classes=num_classes, base_c=32)
     s_model = s_model.to(device)
     # model.load_state_dict(torch.load('./best_model.pth')['model'])
-    train_loader, test_loader = get_dataloader(batch_size=2)
+    train_loader, test_loader = get_dataloader(batch_size=1)
     optimizer = torch.optim.Adam(s_model.parameters(), lr=lr)
 
     confmat = ConfusionMatrix(num_classes)
