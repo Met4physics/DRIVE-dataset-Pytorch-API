@@ -128,24 +128,25 @@ if __name__ == '__main__':
     s_model = S_UNet(in_channels=3, num_classes=num_classes, base_c=32)
     s_model = s_model.to(device)
     # model.load_state_dict(torch.load('./best_model.pth')['model'])
-    train_loader, test_loader = get_dataloader(batch_size=1)
+    train_loader, test_loader = get_dataloader(batch_size=2)
     optimizer = torch.optim.Adam(s_model.parameters(), lr=lr)
 
     confmat = ConfusionMatrix(num_classes)
     s_model.train()
     loss_weight = torch.as_tensor([1.0, 2.0], device=device)
 
-    for i in range(epoch):
-        for inputs, labels in train_loader:
-            inputs = inputs.to(device)
-            labels = labels.to(device)
-            outputs = s_model(inputs)
-            optimizer.zero_grad()
-            # loss = criterion(outputs, labels, loss_weight, dice=False, num_classes=num_classes, ignore_index=255)
-            loss = nn.functional.cross_entropy(outputs, labels, ignore_index=255, weight=loss_weight)
-            loss.backward()
-            optimizer.step()
-            print(f'epoch {i}: loss = {loss}')
+    with torch.autograd.set_detect_anomaly(True):
+        for i in range(epoch):
+            for inputs, labels in train_loader:
+                inputs = inputs.to(device)
+                labels = labels.to(device)
+                outputs = s_model(inputs)
+                optimizer.zero_grad()
+                # loss = criterion(outputs, labels, loss_weight, dice=False, num_classes=num_classes, ignore_index=255)
+                loss = nn.functional.cross_entropy(outputs, labels, ignore_index=255, weight=loss_weight)
+                loss.backward()
+                optimizer.step()
+                print(f'epoch {i}: loss = {loss}')
 
     with torch.no_grad():
         for inputs, labels in test_loader:

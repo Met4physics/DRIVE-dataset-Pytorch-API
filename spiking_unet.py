@@ -6,7 +6,7 @@ from typing import Dict
 
 
 class DoubleConv(nn.Module):
-    def __init__(self, in_channels, out_channels, mid_channels=None):
+    def __init__(self, in_channels, out_channels, mid_channels=None, step_mode='m'):
         super(DoubleConv, self).__init__()
         if mid_channels is None:
             mid_channels = out_channels
@@ -18,6 +18,7 @@ class DoubleConv(nn.Module):
             layer.BatchNorm2d(out_channels),
             neuron.IFNode(surrogate_function=surrogate.LeakyKReLU(leak=0)),
         )
+        functional.set_step_mode(self, step_mode=step_mode)
 
     def forward(self, x):
         t = self.c(x)
@@ -65,9 +66,10 @@ class Up(nn.Module):
 
 
 class OutConv(nn.Module):
-    def __init__(self, in_channels, num_classes):
+    def __init__(self, in_channels, num_classes, step_mode='m'):
         super(OutConv, self).__init__()
         self.c = layer.Conv2d(in_channels, num_classes, kernel_size=1)
+        functional.set_step_mode(self, step_mode=step_mode)
 
 
     def forward(self, x):
@@ -88,7 +90,6 @@ class S_UNet(nn.Module):
         self.num_classes = num_classes
         self.bilinear = bilinear
         self.T = T
-        self.step_mode = step_mode
 
         self.in_conv = DoubleConv(in_channels, base_c)
         self.down1 = Down(base_c, base_c * 2, step_mode)
@@ -114,6 +115,7 @@ class S_UNet(nn.Module):
         x = self.up2(x, x3)
         x = self.up3(x, x2)
         x = self.up4(x, x1)
-        logits = self.out_conv(x).mean(0)
+        out = self.out_conv(x)
+        logits = out.mean(0)
 
         return logits
