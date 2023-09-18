@@ -67,7 +67,6 @@ def dice_loss(x: torch.Tensor, target: torch.Tensor, multiclass: bool = False, i
 
 
 def criterion(inputs, target, loss_weight=None, num_classes: int = 2, dice: bool = True, ignore_index: int = -100):
-
     loss = nn.functional.cross_entropy(inputs, target, ignore_index=ignore_index, weight=loss_weight)
     if dice is True:
         dice_target = build_target(target, num_classes, ignore_index)
@@ -115,8 +114,10 @@ if __name__ == '__main__':
     std = (0.127, 0.079, 0.043)
     lr = 0.001
     epoch = 150
-    # device = torch.device('cuda' if torch.cuda.is_available() else "cpu")
-    device = torch.device('cpu')
+    batch_size = 2
+    T = 6
+    device = torch.device('cuda' if torch.cuda.is_available() else "cpu")
+    # device = torch.device('cpu')
     num_classes = 2
 
     wandb.init(
@@ -125,42 +126,50 @@ if __name__ == '__main__':
         config={
             "learning_rate": lr,
             "epochs": epoch,
+            "optimizer": "Adam",
+            "T": T,
         }
     )
 
     print(torch.cuda.current_device())
     # model = UNet(in_channels=3, num_classes=num_classes, base_c=32)
-    s_model = S_UNet(in_channels=3, num_classes=num_classes, base_c=32)
+    s_model = S_UNet(in_channels=3, num_classes=num_classes, base_c=32, T=T)
     # s_model = ts_UNet(in_channels=3, num_classes=num_classes, base_c=32)
     s_model = s_model.to(device)
     # model.load_state_dict(torch.load('./best_model.pth')['model'])
-    train_loader, test_loader = get_dataloader(batch_size=1)
+    train_loader, test_loader = get_dataloader(batch_size=batch_size)
     optimizer = torch.optim.Adam(s_model.parameters(), lr=lr)
 
     confmat = ConfusionMatrix(num_classes)
+    step_confmat = ConfusionMatrix(num_classes)
     s_model.train()
     loss_weight = torch.as_tensor([1.0, 2.0], device=device)
 
-    with torch.autograd.set_detect_anomaly(True):
-        for i in range(epoch):
-            l = []
-            for inputs, labels in train_loader:
-                inputs = inputs.to(device)
-                labels = labels.to(device)
-                outputs = s_model(inputs)
-                optimizer.zero_grad()
-                loss = criterion(outputs, labels, loss_weight, dice=True, num_classes=num_classes, ignore_index=255)
-                # loss = nn.functional.cross_entropy(outputs, labels, ignore_index=255, weight=loss_weight)
-                wandb.log({'loss':loss})
-                l.append(loss.item())
-                loss.backward()
-                optimizer.step()
-                functional.reset_net(s_model)
-            l_mean = round(sum(l) / len(l), 3)
-            print(f'epoch {i}: loss = {l_mean}')
+    for i in range(epoch):
+        l = []
+        for inputs, labels in train_loader:
+            inputs = inputs.to(device)
+            labels = labels.to(device)
+            outputs = s_model(inputs)
+            optimizer.zero_grad()
+            loss = criterion(outputs, labels, loss_weight, dice=True, num_classes=num_classes, ignore_index=255)
+            step_confmat.update(labels.flatten(), outputs.argmax(1).flatten())
+            # loss = nn.functional.cross_entropy(outputs, labels, ignore_index=255, weight=loss_weight)
+            wandb.log({'loss': loss})
+            l.append(loss.item())
+            loss.backward()
+            optimizer.step()
+            functional.reset_net(s_model)
+        s_acc_global, s_acc, s_iou, s_f1 = step_confmat.compute()
+        step_confmat.reset()
+        l_mean = round(sum(l) / len(l), 3)
+        wandb.log({'s_acc_global': s_acc_global, 's_acc': torch.mean(s_acc), 's_iou': torch.mean(s_iou), 's_f1': torch.mean(s_f1)})
+        print(f'epoch {i}: loss = {l_mean}')
 
     with torch.no_grad():
         for inputs, labels in test_loader:
+            inputs = inputs.to(device)
+            labels = labels.to(device)
             outputs = s_model(inputs)
             confmat.update(labels.flatten(), outputs.argmax(1).flatten())
             functional.reset_net(s_model)
