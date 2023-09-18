@@ -163,7 +163,7 @@ if __name__ == '__main__':
         s_acc_global, s_acc, s_iou, s_f1 = step_confmat.compute()
         step_confmat.reset()
         l_mean = round(sum(l) / len(l), 3)
-        wandb.log({'s_acc_global': s_acc_global, 's_acc': torch.mean(s_acc), 's_iou': torch.mean(s_iou), 's_f1': torch.mean(s_f1)})
+        wandb.log({'s_acc_global': s_acc_global, 's_acc': s_acc.mean(), 's_iou': s_iou.mean(), 's_f1': s_f1.mean()})
         print(f'epoch {i}: loss = {l_mean}')
 
     with torch.no_grad():
