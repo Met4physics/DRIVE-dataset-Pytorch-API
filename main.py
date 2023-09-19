@@ -144,6 +144,7 @@ if __name__ == '__main__':
     step_confmat = ConfusionMatrix(num_classes)
     s_model.train()
     loss_weight = torch.as_tensor([1.0, 2.0], device=device)
+    min_loss = 100
 
     for i in range(epoch):
         l = []
@@ -165,6 +166,23 @@ if __name__ == '__main__':
         l_mean = round(sum(l) / len(l), 3)
         wandb.log({'s_acc_global': s_acc_global, 's_acc': s_acc.mean(), 's_iou': s_iou.mean(), 's_f1': s_f1.mean()})
         print(f'epoch {i}: loss = {l_mean}')
+
+        save_max = False
+        if l_mean < min_loss:
+            min_loss = l_mean
+            save_max = True
+
+        checkpoint = {
+            'net': s_model.state_dict(),
+            'optimizer': optimizer.state_dict(),
+            'epoch': epoch,
+            'min_loss': min_loss
+        }
+
+        if save_max:
+            torch.save(checkpoint, './checkpoint_max.pth')
+
+        torch.save(checkpoint, './checkpoint_latest.pth')
 
     with torch.no_grad():
         for inputs, labels in test_loader:
