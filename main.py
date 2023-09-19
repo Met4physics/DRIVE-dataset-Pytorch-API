@@ -109,10 +109,17 @@ class ConfusionMatrix(object):
         return acc_global, acc, iu, f1
 
 
+def set_seed(seed=1):
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+
 if __name__ == '__main__':
     mean = (0.709, 0.381, 0.224)
     std = (0.127, 0.079, 0.043)
-    lr = 0.001
+    set_seed(3407)
+    lr = 0.0001
     epoch = 150
     batch_size = 2
     T = 6
@@ -162,9 +169,10 @@ if __name__ == '__main__':
             optimizer.step()
             functional.reset_net(s_model)
         s_acc_global, s_acc, s_iou, s_f1 = step_confmat.compute()
+        s_acc, s_iou, s_f1 = s_acc.mean().item(), s_iou.mean().item(), s_f1.mean().item()
         step_confmat.reset()
         l_mean = round(sum(l) / len(l), 3)
-        wandb.log({'s_acc_global': s_acc_global, 's_acc': s_acc.mean(), 's_iou': s_iou.mean(), 's_f1': s_f1.mean()})
+        wandb.log({'s_acc_global': s_acc_global, 's_acc': s_acc, 's_iou': s_iou, 's_f1': s_f1})
         print(f'epoch {i}: loss = {l_mean}')
 
         save_max = False

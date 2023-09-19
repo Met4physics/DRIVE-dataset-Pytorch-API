@@ -77,6 +77,20 @@ class OutConv(nn.Module):
         return temp
 
 
+class Encoder(nn.Module):
+    def __init__(self, channels, step_mode='m'):
+        super(Encoder, self).__init__()
+        self.encoder = nn.Sequential(
+            layer.Conv2d(channels, channels, kernel_size=3, padding=1, bias=False),
+            layer.BatchNorm2d(channels),
+            neuron.IFNode(surrogate_function=surrogate.ATan()),
+        )
+        functional.set_step_mode(self, step_mode=step_mode)
+
+    def forward(self, x):
+        return self.encoder(x)
+
+
 class S_UNet(nn.Module):
     def __init__(self,
                  in_channels: int = 1,
@@ -91,6 +105,7 @@ class S_UNet(nn.Module):
         self.bilinear = bilinear
         self.T = T
 
+        self.encoder = Encoder(in_channels)
         self.in_conv = DoubleConv(in_channels, base_c)
         self.down1 = Down(base_c, base_c * 2, step_mode)
         self.down2 = Down(base_c * 2, base_c * 4, step_mode)
@@ -106,6 +121,7 @@ class S_UNet(nn.Module):
 
     def forward(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
         x = x.repeat(self.T, 1, 1, 1, 1)
+        x = self.encoder(x)
         x1 = self.in_conv(x)
         x2 = self.down1(x1)
         x3 = self.down2(x2)
