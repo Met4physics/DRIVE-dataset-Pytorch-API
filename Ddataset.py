@@ -83,5 +83,5 @@ def get_dataloader(path='./', batch_size=4, num_workers=4, shuffle=False, pin_me
                              num_workers=num_workers,
                              shuffle=shuffle,
                              pin_memory=pin_memory,
-                             collate_fn=train_dataset.collate_fn)
+                             collate_fn=test_dataset.collate_fn)
     return train_loader, test_loader

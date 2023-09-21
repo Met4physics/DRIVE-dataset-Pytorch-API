@@ -4,7 +4,6 @@ import torch.nn as nn
 import os
 from unet import UNet
 from spiking_unet import S_UNet
-from test import ts_UNet
 from spikingjelly.activation_based import functional
 from PIL import Image
 import wandb

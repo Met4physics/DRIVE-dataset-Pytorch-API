@@ -23,12 +23,15 @@ if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else "cpu")
 
     s_model = S_UNet(in_channels=3, num_classes=num_classes, base_c=32, T=T)
+    s_model.load_state_dict(torch.load(weights_path)['net'])
+    best_epoch = torch.load(weights_path)['epoch']
+    print(f'best epoch: {best_epoch}')
     s_model.to(device)
     roi_img = Image.open(roi_mask_path).convert('L')
     roi_img = np.array(roi_img)
     original_img = Image.open(img_path).convert('RGB')
     data_transform = transform.Compose([transform.ToTensor(), transform.Normalize(mean=mean, std=std)])
-    img = data_transform(original_img)
+    img, img2 = data_transform(original_img, original_img)
     img = torch.unsqueeze(img, dim=0)
 
     s_model.eval()
@@ -40,7 +43,7 @@ if __name__ == '__main__':
 
         output = s_model(img.to(device))
 
-        prediction = output['out'].argmax(1).squeeze(0)
+        prediction = output.argmax(1).squeeze(0)
         prediction = prediction.to("cpu").numpy().astype(np.uint8)
         # 将前景对应的像素值改成255(白色)
         prediction[prediction == 1] = 255
@@ -48,3 +51,4 @@ if __name__ == '__main__':
         prediction[roi_img == 0] = 0
         mask = Image.fromarray(prediction)
         mask.save("test_result.png")
+        print('finish')
