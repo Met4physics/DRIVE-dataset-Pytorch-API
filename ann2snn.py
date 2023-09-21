@@ -1,8 +1,9 @@
 import numpy as np
 import torch
 import torch.nn as nn
-from main import criterion
+from main import criterion, ConfusionMatrix
 import os
+import time
 from unet import UNet
 from spiking_unet import S_UNet
 from spikingjelly.activation_based import functional, ann2snn
@@ -17,7 +18,7 @@ if __name__ == '__main__':
     lr = 0.0001
     epoch = 150
     batch_size = 2
-    T = 2
+    T = 16
     device = torch.device('cuda' if torch.cuda.is_available() else "cpu")
     # device = torch.device('cpu')
     num_classes = 2
@@ -34,14 +35,22 @@ if __name__ == '__main__':
     loss_weight = torch.as_tensor([1.0, 2.0], device=device)
 
     losses = []
-    for x, y in train_dataloader:
-        x = x.repeat(T, 1, 1, 1, 1)
-        x = x.to(device)
-        y = y.to(device)
-        outputs = functional.multi_step_forward(x, snn_model)
-        outputs = outputs.mean(0)
-        loss = criterion(outputs, y, loss_weight, dice=True, num_classes=num_classes, ignore_index=255)
-        losses.append(loss.item())
-        functional.reset_net(snn_model)
+    # for e in range(epoch):
+    #     for i, (imgs, targets) in enumerate(train_dataloader):
+    #         imgs = imgs.repeat(T, 1, 1, 1, 1)
+    #         imgs = imgs.to(device)
+    #         targets = targets.to(device)
+    #         print(i)
+
+    with torch.no_grad():
+        for x, y in train_dataloader:
+            x = x.repeat(T, 1, 1, 1, 1)
+            x = x.to(device)
+            y = y.to(device)
+            outputs = functional.multi_step_forward(x, snn_model)
+            outputs = outputs.mean(0)
+            loss = criterion(outputs, y, loss_weight, dice=True, num_classes=num_classes, ignore_index=255)
+            losses.append(loss.item())
+            functional.reset_net(snn_model)
     print(sum(losses) / len(losses))
 
