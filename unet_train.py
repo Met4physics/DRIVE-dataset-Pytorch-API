@@ -2,6 +2,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import os
+from unet import UNet
 from spiking_unet import S_UNet
 from spikingjelly.activation_based import functional
 from PIL import Image
@@ -120,26 +121,22 @@ if __name__ == '__main__':
     lr = 0.0001
     epoch = 150
     batch_size = 2
-    T = 6
     device = torch.device('cuda' if torch.cuda.is_available() else "cpu")
     # device = torch.device('cpu')
     num_classes = 2
 
     wandb.init(
-        project='spiking-unet',
+        project='unet',
 
         config={
             "learning_rate": lr,
             "epochs": epoch,
             "optimizer": "Adam",
-            "T": T,
         }
     )
 
     print(torch.cuda.current_device())
-    # model = UNet(in_channels=3, num_classes=num_classes, base_c=32)
-    s_model = S_UNet(in_channels=3, num_classes=num_classes, base_c=32, T=T)
-    # s_model = ts_UNet(in_channels=3, num_classes=num_classes, base_c=32)
+    s_model = UNet(in_channels=3, num_classes=num_classes, base_c=32)
     s_model = s_model.to(device)
     # model.load_state_dict(torch.load('./best_model.pth')['model'])
     train_loader, test_loader = get_dataloader(batch_size=batch_size)
@@ -165,7 +162,6 @@ if __name__ == '__main__':
             l.append(loss.item())
             loss.backward()
             optimizer.step()
-            functional.reset_net(s_model)
         s_acc_global, s_acc, s_iou, s_f1 = step_confmat.compute()
         s_acc, s_iou, s_f1 = s_acc.mean().item(), s_iou.mean().item(), s_f1.mean().item()
         step_confmat.reset()
@@ -196,7 +192,6 @@ if __name__ == '__main__':
             labels = labels.to(device)
             outputs = s_model(inputs)
             confmat.update(labels.flatten(), outputs.argmax(1).flatten())
-            functional.reset_net(s_model)
 
     acc_global, acc, iou, f1 = confmat.compute()
     acc_global, acc, iou, f1 = acc_global.item(), acc.tolist(), iou.tolist(), f1.tolist()
